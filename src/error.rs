@@ -62,11 +62,4 @@ impl From<error::Error> for KvError {
     }
 }
 
-// impl From<worker::Error> for Error {
-//     fn from(err: worker::Error) -> Self {
-//         Error::WorkerError(err)
-//     }
-// }
-
-
 pub type Result<T> = std::result::Result<T, Error>;
