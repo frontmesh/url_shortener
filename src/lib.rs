@@ -6,10 +6,11 @@ use std::str::FromStr;
 use worker::{console_error, console_log, event, Date, Env, Request, Response, Result as WorkerResult, Router, RouteContext};
 use rand::{ Rng };
 use rand::distributions::Alphanumeric;
-use serde::Deserialize;
+use serde::{Deserialize};
 use serde_json::json;
 use crate::constants::KV_BINDING;
 use url::Url;
+
 use crate::error::Result;
 
 
@@ -52,7 +53,7 @@ async fn handle_post_short_url_request(mut req: Request, ctx: RouteContext<()>) 
 
     console_log!("Received URL: {}, Received in URL: {}", url, req.url()?.host_str().unwrap());
 
-    let short_url = format!("https://{}{}/{}", req.url()?.host_str().unwrap(), "/", shortlink);
+    let short_url = format!("https://{}{}{}", req.url()?.host_str().unwrap(), "/", shortlink);
 
     let resp = Response::from_json(&json!({
         "short_url": short_url
@@ -70,9 +71,13 @@ async fn handle_get_short_url_request(req: Request, ctx: RouteContext<()>) -> Re
         let kv = ctx.kv(KV_BINDING)?;
         let actual_url = kv.get(p).text().await?;
         if let Some(a) = actual_url {
-            let furl = Url::from_str(a.as_str())?;
+            let furl = Url::from_str(a.as_str()).map_err(|e| {
+                console_log!("internal error: URL parsing: {:?}", e);
+                error::Error::InvalidRequest("internal error: URL parsing".to_string())
+            });
+
             let resp = Response::from_json(&json!({
-                "full_url": furl
+                "full_url": furl.unwrap().to_string()
             }))?;
             return Ok(resp);
         } else {
@@ -83,10 +88,8 @@ async fn handle_get_short_url_request(req: Request, ctx: RouteContext<()>) -> Re
     }
 }
 
-
-
 #[event(fetch)]
-async fn main(req: Request, env: Env, ctx: worker::Context) -> WorkerResult<Response> {
+async fn main(req: Request, env: Env, _ctx: worker::Context) -> WorkerResult<Response> {
     log_request(&req);
 
     // Optionally, get more helpful error messages written to the console in the case of a panic.
@@ -95,7 +98,7 @@ async fn main(req: Request, env: Env, ctx: worker::Context) -> WorkerResult<Resp
     let router = Router::new();
 
     return router
-        .get("/", |_, _| { Response::ok("Hello from workers!!") })
+        .get("/", |_, _| { Response::ok("Hello from url shortener!") })
         .get_async("/:short_link", | req, ctx| async move {
             let result = handle_get_short_url_request(req, ctx).await;
             Ok(result_to_response(result))
@@ -104,7 +107,7 @@ async fn main(req: Request, env: Env, ctx: worker::Context) -> WorkerResult<Resp
             let result = handle_post_short_url_request(req, ctx).await;
             Ok(result_to_response(result))
         })
-        .get("/worker-version", |_, ctx|{
+        .get("/worker-version", |_, _|{
             Response::ok("0.0.18".to_string())
         })
         .run(req, env).await

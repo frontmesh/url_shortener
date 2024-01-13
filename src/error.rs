@@ -1,6 +1,9 @@
 use serde_json::json;
 use thiserror::Error;
+use worker::kv::KvError;
 use worker::Response;
+use worker::wasm_bindgen::JsValue;
+use crate::error;
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -18,6 +21,7 @@ pub enum Error {
     SerdeJsonError(#[from] serde_json::Error),
     #[error("internal error")]
     InternalError(String),
+
 }
 
 impl Error {
@@ -29,7 +33,7 @@ impl Error {
             Error::WorkerError(_) => 500,
             Error::KvError(_) => 500,
             Error::SerdeJsonError(_) => 500,
-            Error::InternalError(_) => 500
+            Error::InternalError(_) => 500,
         }
     }
 
@@ -50,5 +54,19 @@ impl From<Error> for Response {
         resp
     }
 }
+
+
+impl From<error::Error> for KvError {
+    fn from(error: error::Error) -> Self {
+        KvError::from(JsValue::from_str(&error.to_string()))
+    }
+}
+
+// impl From<worker::Error> for Error {
+//     fn from(err: worker::Error) -> Self {
+//         Error::WorkerError(err)
+//     }
+// }
+
 
 pub type Result<T> = std::result::Result<T, Error>;
